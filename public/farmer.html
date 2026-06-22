@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Farmer Dashboard - AgroConnect</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+  </head>
+  <body>
+    <nav class="navbar navbar-light bg-white shadow-sm">
+      <div class="container"><a class="navbar-brand" href="/">AgroConnect</a> <a class="btn btn-link" href="/login.html">Logout</a></div>
+    </nav>
+
+    <main class="container py-5">
+      <div class="row">
+        <div class="col-lg-5">
+          <div class="card shadow-sm mb-4">
+            <div class="card-body">
+              <h4 class="card-title">Add Crop</h4>
+              <form id="cropForm">
+                <div class="mb-2"><input class="form-control" name="crop_name" placeholder="Crop name" required /></div>
+                <div class="mb-2"><input class="form-control" name="quantity" type="number" placeholder="Quantity (e.g., quintals)" required /></div>
+                <div class="mb-3"><input class="form-control" name="price" type="number" placeholder="Expected price (₹)" required /></div>
+                <button class="btn btn-success">Add Crop</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-7">
+          <h4>Your Listings</h4>
+          <div id="listings" class="list-group"></div>
+        </div>
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      const api = '/api';
+      const user = JSON.parse(localStorage.getItem('user')||'null');
+      if(!user || user.role!=='farmer'){
+        alert('Please login as a farmer'); location.href='/login.html'
+      }
+
+      async function loadListings(){
+        // use authenticated endpoint to load own listings
+        const token = localStorage.getItem('token');
+        const res = await fetch(api+'/crops/my',{headers:{'Authorization': token ? ('Bearer '+token) : ''}});
+        const data = await res.json();
+        const container = document.getElementById('listings'); container.innerHTML='';
+        data.forEach(c=>{
+          const el = document.createElement('div'); el.className='list-group-item d-flex justify-content-between align-items-center';
+          el.innerHTML = `<div><strong>${c.crop_name}</strong><div class="small text-muted">Posted: ${new Date(c.date_posted).toLocaleDateString()}</div></div><div> ${c.quantity} — ₹${c.price}</div>`;
+          container.appendChild(el);
+        });
+      }
+
+      document.getElementById('cropForm').onsubmit = async e=>{
+        e.preventDefault();
+        const f=e.target;
+        const body = {crop_name:f.crop_name.value,quantity:+f.quantity.value,price:+f.price.value};
+        const token = localStorage.getItem('token');
+        const res = await fetch(api+'/crops',{method:'POST',headers:{'content-type':'application/json','Authorization': token ? ('Bearer '+token) : ''},body:JSON.stringify(body)});
+        const data = await res.json();
+        if(res.ok){ f.reset(); loadListings(); } else alert(data.msg || JSON.stringify(data));
+      }
+
+      loadListings();
+    </script>
+  </body>
+</html>

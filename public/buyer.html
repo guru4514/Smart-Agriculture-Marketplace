@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Buyer Dashboard - AgroConnect</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+  </head>
+  <body>
+    <nav class="navbar navbar-light bg-white shadow-sm">
+      <div class="container"><a class="navbar-brand" href="/">AgroConnect</a> <a class="btn btn-link" href="/login.html">Logout</a></div>
+    </nav>
+
+    <main class="container py-5">
+      <!-- Verification Alert -->
+      <div id="verificationAlert" class="alert alert-warning alert-dismissible fade show d-none" role="alert">
+        <h5>⚠️ Email Verification Required</h5>
+        <p class="mb-2">Please verify your email to view farmer contact information.</p>
+        <p class="mb-2 small" id="verificationInstructions">Check your email for the verification link, or click below to resend:</p>
+        <button class="btn btn-sm btn-warning" id="resendBtn">Resend Verification Email</button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+
+      <h3 class="mb-4">Available Crops</h3>
+      <div id="crops" class="row g-3"></div>
+    </main>
+
+    <!-- Contact Modal -->
+    <div class="modal fade" id="contactModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Farmer Contact</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="contactInfo"></div>
+          <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      const api = '/api';
+      const user = JSON.parse(localStorage.getItem('user')||'null');
+      if(!user || user.role!=='buyer'){
+        alert('Please login as a buyer'); location.href='/login.html'
+      }
+
+      // Check verification status and show alert if needed
+      if(user.email && !user.emailVerified) {
+        document.getElementById('verificationAlert').classList.remove('d-none');
+        document.getElementById('verificationInstructions').innerHTML = 
+          `We sent a verification link to <strong>${user.email}</strong>. ` +
+          `Check your server console for the link in development mode, or click below to resend:`;
+      }
+
+      // Resend verification email
+      document.getElementById('resendBtn').onclick = async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(api+'/settings/resend-verification', {
+            method: 'POST',
+            headers: {'Authorization': 'Bearer '+token}
+          });
+          const data = await res.json();
+          if(res.ok) {
+            alert('Verification link sent! Check your email (or server console in dev mode).');
+          } else {
+            alert(data.msg || 'Failed to resend verification');
+          }
+        } catch(err) {
+          alert('Error resending verification: ' + err.message);
+        }
+      };
+
+      async function loadCrops(){
+        const res = await fetch(api+'/crops');
+        const data = await res.json();
+        const container = document.getElementById('crops'); container.innerHTML='';
+        data.forEach(c=>{
+          const col = document.createElement('div'); col.className='col-md-4';
+          col.innerHTML = `<div class="card shadow-sm h-100"><div class="card-body"><h5 class="card-title">${c.crop_name}</h5><p class="card-text">${c.quantity} — ₹${c.price}</p><p class="text-muted small">Posted by: ${c.farmer.name}</p><button class="btn btn-sm btn-outline-primary contact" data-id="${c.farmer._id}">Contact Farmer</button></div></div>`;
+          container.appendChild(col);
+        });
+
+        document.querySelectorAll('.contact').forEach(btn=>btn.onclick=async e=>{
+          const id = e.target.getAttribute('data-id');
+          const token = localStorage.getItem('token');
+          if(!token){
+            alert('Please login to view contact information');
+            location.href='/login.html';
+            return;
+          }
+          const res = await fetch(api+`/crops/contact/${id}`,{headers:{'Authorization': 'Bearer '+token}});
+          if(!res.ok){
+            const err = await res.json();
+            // Show more helpful error message for verification
+            if(err.msg && err.msg.includes('verify your email')) {
+              alert('⚠️ Email Verification Required\n\n' + err.msg + '\n\nPlease check the yellow banner above for instructions.');
+              window.scrollTo({top: 0, behavior: 'smooth'});
+            } else {
+              alert(err.msg || 'Unable to fetch contact info');
+            }
+            return;
+          }
+          const farmer = await res.json();
+          document.getElementById('contactInfo').innerHTML = `<strong>${farmer.name}</strong><br/>Phone: ${farmer.phone || 'N/A'}<br/>Email: ${farmer.email || 'N/A'}<br/>Location: ${farmer.location || 'N/A'}`;
+          const modal = new bootstrap.Modal(document.getElementById('contactModal'));
+          modal.show();
+        });
+      }
+
+      loadCrops();
+    </script>
+  </body>
+</html>
